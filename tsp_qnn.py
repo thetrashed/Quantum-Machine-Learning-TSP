@@ -18,6 +18,8 @@ from qiskit_aer import AerSimulator, StatevectorSimulator
 import matplotlib.pyplot as plt
 
 
+
+
 class TSPSolver:
     def __init__(self, flow, distance, beta, theta1, theta2, alpha, expected_result, loss):
         self.__affinity = TensorProduct(flow, distance)
@@ -204,10 +206,13 @@ def generate_flow_matrix(num_nodes, edges):
     return fmatrix
 
 
-def main():
+def train_model(data_file):
     # Number of nodes
     nodes = 4
 
+    # Load data from excel file
+    flow_matrices, expected_results = data.load_file(data_file)
+    
     # TSP-4 distance matrix
     dist_matrix = np.array([[0, 2, 3, 4], [2, 0, 4, 3], [3, 4, 0, 2], [4, 2, 3, 0]])
 
