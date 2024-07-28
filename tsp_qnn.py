@@ -10,7 +10,6 @@ from qiskit.circuit import Parameter, ParameterVector
 
 from qiskit.circuit.library.standard_gates import RXGate, RYGate, RZGate, RZZGate
 
-from qiskit_algorithms.optimizers import ADAM
 from qiskit_algorithms.gradients import SPSAEstimatorGradient
 
 from qiskit_aer import AerSimulator, StatevectorSimulator
@@ -18,6 +17,7 @@ from qiskit_aer import AerSimulator, StatevectorSimulator
 import matplotlib.pyplot as plt
 
 import data_script as ds
+from optimizer import adam
 
 
 class TSPSolver:
@@ -60,7 +60,12 @@ class TSPSolver:
         self.__ref_circuit = QuantumCircuit(self.__num_qubits)
         self.__encoding_layer(self.__ref_circuit)
 
-    def update_variational_layers(self):
+    def update_variational_layers(self, params):
+        self.__beta = params[0]
+        self.__theta1 = params[1]
+        self.__theta2 = params[2]
+        self.__alpha = params[3]
+        self.__variational_circuit = QuantumCircuit(self.__num_qubits)
         self.__constraint_layer(self.__variational_circuit)
         self.__perceptron_layer(self.__variational_circuit)
         self.__pooling_layer(self.__variational_circuit)
@@ -254,16 +259,11 @@ def train_model(data_file):
         print(params)
 
         # Set theta1 and theta2 values
-        solver.__theta1 = params[1]
-        solver.__theta2 = params[2]
-        solver.__alpha = params[3]
-
         # Update the beta_para for MCRX gate
-        # Assuming you want to use the first value from beta_para
-        solver.__beta = params[0]
-
         # Run the quantum neural network and compute loss
-        solver.update_variational_layers()
+        solver.update_variational_layers(params)
+        solver.ansatz()
+        # plt.show()
         obj_loss = solver.variational_layers_loss()
         return obj_loss
 
@@ -280,12 +280,13 @@ def train_model(data_file):
 
         return gradient
 
-    solver.ansatz().draw("mpl")
+    solver.ansatz()
 
     params = np.array([beta, theta1, theta2, alpha])
 
     # Instantiate Adam optimizer
-    adam_optimizer = ADAM(
+    adam_optimizer = adam(
+        solver,
         maxiter=5,
         tol=1e-06,
         lr=0.1,
@@ -298,16 +299,9 @@ def train_model(data_file):
     )
 
     # Run optimization on all the data
-    for row in training_data.itertuples():
-        print("\n", row[0])
-        if row[0] != 0:
-            solver.update_referential_layer(row[1], row[2])
-
-        params = adam_optimizer.minimize(
-            objective_function, params, gradient_function
-        ).x
-        print(params)
-
+    adam_optimizer.minimize(
+        objective_function, params, gradient_function, training_data
+    )
     return params
 
 
