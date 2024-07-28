@@ -17,12 +17,15 @@ from qiskit_aer import AerSimulator, StatevectorSimulator
 
 import matplotlib.pyplot as plt
 
-
+import data_script as ds
 
 
 class TSPSolver:
-    def __init__(self, flow, distance, beta, theta1, theta2, alpha, expected_result, loss):
+    def __init__(
+        self, flow, distance, beta, theta1, theta2, alpha, expected_result, loss
+    ):
         self.__affinity = TensorProduct(flow, distance)
+        self.__flow = flow
         self.__beta = beta
         self.__theta1 = theta1
         self.__theta2 = theta2
@@ -50,6 +53,17 @@ class TSPSolver:
         self.__pooling_layer(var_circuit)
 
         return ref_circuit, var_circuit
+
+    def update_referential_layer(self, new_dist, new_result):
+        self.__expected_result = new_result
+        self.__affinity = TensorProduct(self.__flow, new_dist)
+        self.__ref_circuit = QuantumCircuit(self.__num_qubits)
+        self.__encoding_layer(self.__ref_circuit)
+
+    def update_variational_layers(self):
+        self.__constraint_layer(self.__variational_circuit)
+        self.__perceptron_layer(self.__variational_circuit)
+        self.__pooling_layer(self.__variational_circuit)
 
     def variational_layers_loss(self):
         self.__statevect()
@@ -97,14 +111,14 @@ class TSPSolver:
 
     def __perceptron_layer(self, var_circuit):
         for qubit in range(self.__num_qubits):
-            var_circuit.append(RZGate(self.__theta1[0]), [qubit])
-            var_circuit.append(RYGate(self.__theta2[0]), [qubit])
+            var_circuit.append(RZGate(self.__theta1), [qubit])
+            var_circuit.append(RYGate(self.__theta2), [qubit])
 
         var_circuit.barrier()
 
     def __pooling_layer(self, var_circuit):
         for qubit in range(self.__num_qubits):
-            var_circuit.append(RYGate(self.__alpha[0]), [qubit])
+            var_circuit.append(RYGate(self.__alpha), [qubit])
 
     # Calculates the binary cross-entropy loss
     def cost_function(self):
@@ -211,10 +225,7 @@ def train_model(data_file):
     nodes = 4
 
     # Load data from excel file
-    flow_matrices, expected_results = data.load_file(data_file)
-    
-    # TSP-4 distance matrix
-    dist_matrix = np.array([[0, 2, 3, 4], [2, 0, 4, 3], [3, 4, 0, 2], [4, 2, 3, 0]])
+    training_data = ds.read_data(data_file, "Training data")
 
     # Edge connections
     edges = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
@@ -223,33 +234,36 @@ def train_model(data_file):
     flow = generate_flow_matrix(nodes, edges)
 
     beta = 1.39957953
-    theta1 = [1.9026521]
-    theta2 = [2.22944427]
-    alpha = [5.56530919]
+    theta1 = 1.9026521
+    theta2 = 2.22944427
+    alpha = 5.56530919
     loss = 0
 
-    expected_result = []
-
-    solver = TSPSolver(flow, dist_matrix, beta, theta1, theta2, alpha, expected_result, loss)
+    solver = TSPSolver(
+        flow,
+        training_data["Distance Matrix"][0],
+        beta,
+        theta1,
+        theta2,
+        alpha,
+        training_data["Expected Result"][0],
+        loss,
+    )
 
     def objective_function(params):
         print(params)
-        theta1_values = params[25:50]  # Extract first 9 values for theta1
-        theta2_values = params[50:75]  # Extract next 9 values for theta2
-        alpha = params[75:100]  # Extract alpha
-        beta_para = params[:1]  # Extract beta_para
 
         # Set theta1 and theta2 values
-        solver.__theta1 = theta1_values
-        solver.__theta2 = theta2_values
-        solver.__alpha = alpha
+        solver.__theta1 = params[1]
+        solver.__theta2 = params[2]
+        solver.__alpha = params[3]
 
         # Update the beta_para for MCRX gate
         # Assuming you want to use the first value from beta_para
-        beta_angle = beta_para[0]
-        solver.__beta = beta_angle
+        solver.__beta = params[0]
 
         # Run the quantum neural network and compute loss
+        solver.update_variational_layers()
         obj_loss = solver.variational_layers_loss()
         return obj_loss
 
@@ -268,13 +282,7 @@ def train_model(data_file):
 
     solver.ansatz().draw("mpl")
 
-    n = edges.shape[0]
-    initial_point = np.array(
-        [beta for i in range(n * n)]
-        + [theta1[0] for i in range(n * n)]
-        + [theta2[0] for i in range(n * n)]
-        + [alpha[0] for i in range(n * n)]
-    )
+    params = np.array([beta, theta1, theta2, alpha])
 
     # Instantiate Adam optimizer
     adam_optimizer = ADAM(
@@ -289,12 +297,19 @@ def train_model(data_file):
         snapshot_dir=None,
     )
 
-    # Run optimization
-    result = adam_optimizer.minimize(
-        objective_function, initial_point, gradient_function
-    )
-    print(result.x)
+    # Run optimization on all the data
+    for row in training_data.itertuples():
+        print("\n", row[0])
+        if row[0] != 0:
+            solver.update_referential_layer(row[1], row[2])
+
+        params = adam_optimizer.minimize(
+            objective_function, params, gradient_function
+        ).x
+        print(params)
+
+    return params
 
 
 if __name__ == "__main__":
-    main()
+    print(train_model("TSP-4.xlsx"))
