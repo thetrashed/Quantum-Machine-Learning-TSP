@@ -24,7 +24,11 @@ class adam(ADAM):
     def minimize(self, fun, params, jac, dataset):
         i = 0
         while i < self.__maxiter:
+            print(f"Iteration {i}")
             for data in dataset.itertuples():
                 self.__solver.update_referential_layer(data[1], data[2])
                 params = super().minimize(fun, params, jac).x
-                print(params)
+
+            i += 1
+
+        return params

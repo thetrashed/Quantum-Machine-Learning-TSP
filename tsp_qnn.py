@@ -299,8 +299,8 @@ def train_model(data_file):
     )
 
     # Run optimization on all the data
-    adam_optimizer.minimize(
-        objective_function, params, gradient_function, training_data
+    params = adam_optimizer.minimize(
+        objective_function, params, gradient_function, training_data.iloc[:10]
     )
     return params
 
