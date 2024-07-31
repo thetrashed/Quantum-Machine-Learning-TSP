@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.random as random
 
 from sympy import Matrix
 from sympy.physics.quantum import TensorProduct
@@ -15,6 +16,8 @@ from qiskit_algorithms.gradients import SPSAEstimatorGradient
 from qiskit_aer import AerSimulator, StatevectorSimulator
 
 import matplotlib.pyplot as plt
+
+from sklearn.metrics import accuracy_score
 
 import data_script as ds
 from optimizer import adam
@@ -71,9 +74,9 @@ class TSPSolver:
         self.__pooling_layer(self.__variational_circuit)
 
     def variational_layers_loss(self):
-        self.__statevect()
-        self.__y_matrix()
-        self.cost_function()
+        # self.__statevect()
+        # self.__y_matrix()
+        self.__cost_function()
 
         return self.__loss
 
@@ -126,13 +129,15 @@ class TSPSolver:
             var_circuit.append(RYGate(self.__alpha), [qubit])
 
     # Calculates the binary cross-entropy loss
-    def cost_function(self):
-        X = list(self.__expected_result.flatten())
-        Y = list(self.__y_matrix().flatten())
+    def __cost_function(self):
+        X = self.__expected_result
+        Y = self.__y_matrix()
+        
+        loss = 0
         for i in range(len(X)):
-            self.__loss += -X[i] * np.log(Y[i]) + (1 - X[i]) * np.log(1 - Y[i])
+            loss += X[i] * np.log(Y[i]) + (1 - X[i]) * np.log(1 - Y[i])
 
-        return self.__loss
+        self.__loss = - loss
 
     def __sinkhorn_normalization(
         self, matrix, epsilon=1e-3, max_iters=100, constraint_epsilon=1e-9
@@ -238,10 +243,10 @@ def train_model(data_file):
     # Generate flow matrix
     flow = generate_flow_matrix(nodes, edges)
 
-    beta = 1.39957953
-    theta1 = 1.9026521
-    theta2 = 2.22944427
-    alpha = 5.56530919
+    beta = random.rand() # 1.39957953
+    theta1 = random.rand() # 1.9026521
+    theta2 = random.rand() # 2.22944427
+    alpha = random.rand() # 5.56530919
     loss = 0
 
     solver = TSPSolver(
@@ -262,7 +267,8 @@ def train_model(data_file):
         # Update the beta_para for MCRX gate
         # Run the quantum neural network and compute loss
         solver.update_variational_layers(params)
-        solver.ansatz()
+        
+        # solver.ansatz()
         # plt.show()
         obj_loss = solver.variational_layers_loss()
         return obj_loss
@@ -280,7 +286,7 @@ def train_model(data_file):
 
         return gradient
 
-    solver.ansatz()
+    # solver.ansatz()
 
     params = np.array([beta, theta1, theta2, alpha])
 
@@ -304,6 +310,14 @@ def train_model(data_file):
     )
     return params
 
+def test_data(predicted, expected):
+    return accuracy_score(expected, predicted, normalize=True)
+
+def run_tests(params, data_file, sheet_name):
+    return
 
 if __name__ == "__main__":
-    print(train_model("TSP-4.xlsx"))
+    params = train_model("TSP-4.xlsx")
+    print("Final result: ", params)
+
+    run_tests(params, "TSP-4.xlsx", "Testing data")
