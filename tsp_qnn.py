@@ -1,23 +1,19 @@
 import numpy as np
 import numpy.random as random
 
-from sympy import Matrix
 from sympy.physics.quantum import TensorProduct
 
 from qiskit import QuantumCircuit, transpile
 
-from qiskit.circuit import parameter
-from qiskit.circuit import Parameter, ParameterVector
-
 from qiskit.circuit.library.standard_gates import RXGate, RYGate, RZGate, RZZGate
 
-from qiskit_algorithms.gradients import SPSAEstimatorGradient
+# from qiskit_algorithms.gradients import SPSAEstimatorGradient
 
-from qiskit_aer import AerSimulator, StatevectorSimulator
+from qiskit_aer import StatevectorSimulator
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import r2_score
 
 import data_script as ds
 from optimizer import adam
@@ -98,8 +94,7 @@ class TSPSolver:
         return self.__loss
 
     def get_prediction(self, distance):
-        if self.__referential_circuit != None:
-            self.__referential_circuit = QuantumCircuit(self.__num_qubits)
+
         self.update_referential_layer(distance, None)
         prediction = self.__y_matrix()
 
@@ -336,7 +331,7 @@ def train_model(data_file):
 
 
 def test_data(predicted, expected):
-    return accuracy_score(expected, predicted, normalize=True)
+    return r2_score(expected, predicted)
 
 
 def run_tests(params, data_file, sheet_name, start_idx=0, end_idx=None):
@@ -348,13 +343,14 @@ def run_tests(params, data_file, sheet_name, start_idx=0, end_idx=None):
     solver = TSPSolver(flow, None, params[0], params[1], params[2], params[3], None)
 
     for row in df[start_idx : end_idx if end_idx else len(df.index)].itertuples():
-        predicted = solver.get_prediction(row[0])
-        print("Accuracy: ", test_data(predicted, row[1]))
+        predicted = solver.get_prediction(row[1])
+        # print(predicted, row[2])
+        print("Precision Score: ", test_data(predicted, row[2]))
 
 
 if __name__ == "__main__":
-    params = train_model("TSP-4.xlsx")
-    print("Final result: ", params)
-    # params = [-0.01367136, 0.90760773, 1.50059412, 0.60198067]
+    # params = train_model("TSP-4.xlsx")
+    # print("Final result: ", params)
+    params = [0.58740086, -0.30952227, 0.15148493, 1.20740055]
 
-    # run_tests(params, "TSP-4.xlsx", "Testing data", 0, 10)
+    run_tests(params, "TSP-4.xlsx", "Testing data", 0, 10)
