@@ -25,18 +25,35 @@ from optimizer import adam
 
 class TSPSolver:
     def __init__(
-        self, flow, distance, beta, theta1, theta2, alpha, expected_result, loss
+        self,
+        flow,
+        distance,
+        beta,
+        theta1,
+        theta2,
+        alpha,
+        expected_result,
     ):
-        self.__affinity = TensorProduct(flow, distance)
         self.__flow = flow
+        if not (distance is None):
+            self.__affinity = TensorProduct(flow, distance)
+        else:
+            self.__affinity = None
         self.__beta = beta
         self.__theta1 = theta1
         self.__theta2 = theta2
         self.__alpha = alpha
         self.__expected_result = expected_result
-        self.__loss = loss
-        self.__num_qubits = int(np.power(flow.shape[0], 2))
-        self.__referential_circuit, self.__variational_circuit = self.__create_circuit()
+        self.__loss = 0
+        self.__num_qubits = int(np.square(flow.shape[0]))
+
+        if not (self.__affinity is None):
+            self.__referential_circuit, self.__variational_circuit = (
+                self.__create_circuit()
+            )
+        else:
+            self.update_variational_layers([beta, theta1, theta2, alpha])
+            self.__referential_circuit = None
 
     def __create_circuit(self):
         # Initialise circuit of qubits equal to n1 dimension of the affinity matrix
@@ -60,8 +77,8 @@ class TSPSolver:
     def update_referential_layer(self, new_dist, new_result):
         self.__expected_result = new_result
         self.__affinity = TensorProduct(self.__flow, new_dist)
-        self.__ref_circuit = QuantumCircuit(self.__num_qubits)
-        self.__encoding_layer(self.__ref_circuit)
+        self.__referential_circuit = QuantumCircuit(self.__num_qubits)
+        self.__encoding_layer(self.__referential_circuit)
 
     def update_variational_layers(self, params):
         self.__beta = params[0]
@@ -79,6 +96,14 @@ class TSPSolver:
         self.__cost_function()
 
         return self.__loss
+
+    def get_prediction(self, distance):
+        if self.__referential_circuit != None:
+            self.__referential_circuit = QuantumCircuit(self.__num_qubits)
+        self.update_referential_layer(distance, None)
+        prediction = self.__y_matrix()
+
+        return prediction
 
     # Combine the two parts of the circuit and add a measurement
     def ansatz(self):
@@ -132,12 +157,12 @@ class TSPSolver:
     def __cost_function(self):
         X = self.__expected_result
         Y = self.__y_matrix()
-        
+
         loss = 0
         for i in range(len(X)):
-            loss += X[i] * np.log(Y[i]) + (1 - X[i]) * np.log(1 - Y[i])
+            loss += -(X[i] * np.log(Y[i])) + (1 - X[i]) * np.log(1 - Y[i])
 
-        self.__loss = - loss
+        self.__loss = loss
 
     def __sinkhorn_normalization(
         self, matrix, epsilon=1e-3, max_iters=100, constraint_epsilon=1e-9
@@ -243,10 +268,10 @@ def train_model(data_file):
     # Generate flow matrix
     flow = generate_flow_matrix(nodes, edges)
 
-    beta = random.rand() # 1.39957953
-    theta1 = random.rand() # 1.9026521
-    theta2 = random.rand() # 2.22944427
-    alpha = random.rand() # 5.56530919
+    beta = random.rand()  # 1.39957953
+    theta1 = random.rand()  # 1.9026521
+    theta2 = random.rand()  # 2.22944427
+    alpha = random.rand()  # 5.56530919
     loss = 0
 
     solver = TSPSolver(
@@ -257,7 +282,6 @@ def train_model(data_file):
         theta2,
         alpha,
         training_data["Expected Result"][0],
-        loss,
     )
 
     def objective_function(params):
@@ -267,7 +291,7 @@ def train_model(data_file):
         # Update the beta_para for MCRX gate
         # Run the quantum neural network and compute loss
         solver.update_variational_layers(params)
-        
+
         # solver.ansatz()
         # plt.show()
         obj_loss = solver.variational_layers_loss()
@@ -310,14 +334,27 @@ def train_model(data_file):
     )
     return params
 
+
 def test_data(predicted, expected):
     return accuracy_score(expected, predicted, normalize=True)
 
-def run_tests(params, data_file, sheet_name):
-    return
+
+def run_tests(params, data_file, sheet_name, start_idx=0, end_idx=None):
+    nodes = 4
+    edges = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+    flow = generate_flow_matrix(nodes, edges)
+
+    df = ds.read_data(data_file, sheet_name)
+    solver = TSPSolver(flow, None, params[0], params[1], params[2], params[3], None)
+
+    for row in df[start_idx : end_idx if end_idx else len(df.index)].itertuples():
+        predicted = solver.get_prediction(row[0])
+        print("Accuracy: ", test_data(predicted, row[1]))
+
 
 if __name__ == "__main__":
     params = train_model("TSP-4.xlsx")
     print("Final result: ", params)
+    # params = [-0.01367136, 0.90760773, 1.50059412, 0.60198067]
 
-    run_tests(params, "TSP-4.xlsx", "Testing data")
+    # run_tests(params, "TSP-4.xlsx", "Testing data", 0, 10)

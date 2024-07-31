@@ -3,7 +3,7 @@ import numpy as np
 import ast
 
 
-def read_data(fname, sheet_name):
+def read_data(fname, sheet_name) -> pd.DataFrame:
     df = pd.read_excel(fname, sheet_name)
     df["Distance Matrix"] = df["Distance Matrix"].map(ast.literal_eval).map(np.array)
     df["Expected Result"] = (
